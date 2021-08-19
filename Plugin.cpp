@@ -11,7 +11,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	
 	//Bit information about the plugin
 	//Please fill this in!!
-	info.BotName = "BotNameTEST";
+	info.BotName = "NOOB-AI";
 	info.Student_FirstName = "Jochen";
 	info.Student_LastName = "Robbrecht";
 	info.Student_Class = "2DAE02";
@@ -48,8 +48,7 @@ void Plugin::DllInit()
 	ItemInSight* pItemInSight{ new ItemInSight() };
 	NoItemInSight* pNoItemInSight{ new NoItemInSight() };
 	NothingInSight* pNothingInSight{ new NothingInSight() };
-	//SeeAndCanGoInHouseForFlee* pSeeAndCanGoInHouseForFlee{ new SeeAndCanGoInHouseForFlee() };
-	//SeeAndCanGoInHouseForLoot* pSeeAndCanGoInHouseForLoot{ new SeeAndCanGoInHouseForLoot() };
+	SeeAndCanGoInHouse* pSeeAndCanGoInHouse{ new SeeAndCanGoInHouse() };
 	SeeAndCanGoOutHouseIfLooted* pSeeAndCanGoOutHouseIfLooted{ new SeeAndCanGoOutHouseIfLooted() };
 	GoalReached* pGoalReachted{ new GoalReached() };
 	EnemiesNearAndHasPistol* pEnemiesNearAndHasPistol{ new EnemiesNearAndHasPistol() };
@@ -62,9 +61,8 @@ void Plugin::DllInit()
 
 	m_pTransitions.push_back(pItemInSight);
 	m_pTransitions.push_back(pNoItemInSight);
-	m_pTransitions.push_back(pNothingInSight);
-	//m_pTransitions.push_back(pSeeAndCanGoInHouseForFlee); 
-	//m_pTransitions.push_back(pSeeAndCanGoInHouseForLoot);
+	m_pTransitions.push_back(pNothingInSight); 
+	m_pTransitions.push_back(pSeeAndCanGoInHouse);
 	m_pTransitions.push_back(pSeeAndCanGoOutHouseIfLooted);
 	m_pTransitions.push_back(pGoalReachted);
 	m_pTransitions.push_back(pEnemiesNearAndHasPistol);
@@ -80,8 +78,8 @@ void Plugin::DllInit()
 	m_pFSM->AddTransition(pSeekItemState, pWanderState, pNoItemInSight);
 
 	//from wander/flee to seekToGoal if houseInSight&& notInHouse (goal center of house)
-	//m_pFSM->AddTransition(pWanderState, pSeekGoalState, pSeeAndCanGoInHouseForLoot);
-	//m_pFSM->AddTransition(pFleeState, pSeekGoalState, pSeeAndCanGoInHouseForFlee);
+	m_pFSM->AddTransition(pWanderState, pSeekGoalState, pSeeAndCanGoInHouse);
+	m_pFSM->AddTransition(pFleeState, pSeekGoalState, pSeeAndCanGoInHouse);
 
 	//from seekgoal to seekitem if iteminsight and agent is in house
 	//m_pFSM->AddTransition(pSeekGoalState, pSeekItemState, pItemInSight);
@@ -446,9 +444,10 @@ void Plugin::ItemHandling(const AgentInfo& agentInfo)
 bool Plugin::CheckUseItem(const AgentInfo& agentInfo, ItemInfo& itemInfo, UINT index)
 {
 	bool usedItem{ false };
+	float maxFoodAndEnergy{ 10.f };
 	if (itemInfo.Type == eItemType::FOOD)
 	{
-		if (10.f - agentInfo.Energy >= m_pInterface->Food_GetEnergy(itemInfo))
+		if (maxFoodAndEnergy - agentInfo.Energy >= m_pInterface->Food_GetEnergy(itemInfo))
 		{
 			usedItem = m_pInterface->Inventory_UseItem(index);
 			m_pInterface->Inventory_RemoveItem(index);
@@ -457,7 +456,7 @@ bool Plugin::CheckUseItem(const AgentInfo& agentInfo, ItemInfo& itemInfo, UINT i
 	}
 	else if (itemInfo.Type == eItemType::MEDKIT)
 	{
-		if (10.f - agentInfo.Health >= m_pInterface->Medkit_GetHealth(itemInfo))
+		if (maxFoodAndEnergy - agentInfo.Health >= m_pInterface->Medkit_GetHealth(itemInfo))
 		{
 			usedItem = m_pInterface->Inventory_UseItem(index);
 			m_pInterface->Inventory_RemoveItem(index);

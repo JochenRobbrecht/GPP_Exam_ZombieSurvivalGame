@@ -12,9 +12,9 @@
 //functions
 bool IsInHouse(const HouseInfo& houseInfo, const AgentInfo& agentInfo);
 Elite::Vector2 GetClosestItemPos(const std::vector<ItemInfo>& items, const AgentInfo& agentInfo);
-Elite::Vector2 GetPosClosestToWorldCenter(const WorldInfo& worldInfo, const HouseInfo& houseInfo);
-bool SeeAndCanGoOutHouseFunc(Elite::Blackboard* pBlackBoard);
-
+Elite::Vector2 GetClosestPosToWorldCenter(const WorldInfo& worldInfo, const HouseInfo& houseInfo);
+bool SeeAndCanGoOutHouse(Elite::Blackboard* pBlackBoard);
+bool SeeAndCanGoInHouseF(Elite::Blackboard* pBlackBoard);
 //--STATES--
 //----------
 //store positions of previous houses we went it?
@@ -97,10 +97,6 @@ public:
 			//std::cout << "nextPathPos: " << m_NextPathPos.x << ", " << m_NextPathPos.y << std::endl;
 			m_pSeek->SetTarget(m_NextPathPos);
 		}
-		//if nextPathPos hasnt changed in 3 seconds
-		//set timer back to zero
-		//add random value to goal(5-20)(xandy);
-		//
 	}
 private:
 	Seek* m_pSeek = nullptr;
@@ -134,22 +130,7 @@ private:
 	Wander* m_pWander = nullptr;
 	float m_ElapsedSec = 0;
 };
-/*
-//TRANSITION TO FLEE/SEEK IF UNDERNEATH IF IS TRUE
-if(enemy in sight || hp drops for unknown reason)
-if( !hasGun || (hasGun && notEnoughAmmo))
-{
-	if(!inHouse)
-	{
-		flee away straight, (for certain amount of time)
-		if while fleeing house gets detected, set to seekgoal
-	}
-	else
-	{
-		fast seektogoal outside
-	}
-}
-*/
+
 class FleeState : public Elite::FSMState
 {
 public:
@@ -246,7 +227,7 @@ public:
 	{
 		int nrPistols{ };
 		pBlackBoard->GetData("nrPistols", nrPistols);
-		std::cout << nrPistols << std::endl;
+		/*std::cout << nrPistols << std::endl;*/
 		if (nrPistols == 0)return false;
 
 		bool isAttacked{};
@@ -262,36 +243,13 @@ public:
 };
 
 
+
 class SeeAndCanGoInHouse : public Elite::FSMTransition
 {
 public:
 	virtual bool ToTransition(Elite::Blackboard* pBlackBoard)const override
 	{
-		//if house in sight
-		std::vector<HouseInfo> housesInSight;
-		pBlackBoard->GetData("housesInSight", housesInSight);
-		if (!housesInSight.empty())
-		{
-			//get agentInfo
-			AgentInfo agentInfo;
-			pBlackBoard->GetData("agentInfo", agentInfo);
-			//check if not in house
-			if (!IsInHouse(housesInSight[0], agentInfo))
-			{
-				//set center of house as goal
-				pBlackBoard->AddData("currentGoal", housesInSight[0].Center);
-				return true;
-			}
-		}
-		return false;
-	}
-};
-class SeeAndCanGoOutHouse : public Elite::FSMTransition
-{
-public:
-	virtual bool ToTransition(Elite::Blackboard* pBlackBoard)const override
-	{
-		return SeeAndCanGoOutHouseFunc(pBlackBoard);
+		return SeeAndCanGoInHouseF(pBlackBoard);
 	}
 
 };
@@ -304,7 +262,7 @@ public:
 		float elapsedTimeWandering{};
 		pBlackBoard->GetData("elapsedTimeWandering", elapsedTimeWandering, false);
 		if (elapsedTimeWandering < m_MinWanderTime)return false;
-		return SeeAndCanGoOutHouseFunc(pBlackBoard);
+		return SeeAndCanGoOutHouse(pBlackBoard);
 	}
 private:
 	float m_MinWanderTime = 6;
@@ -406,7 +364,7 @@ inline Elite::Vector2 GetClosestItemPos(const std::vector<ItemInfo>& items, cons
 	return closestItemPos;
 }
 
-inline Elite::Vector2 GetPosClosestToWorldCenter(const WorldInfo& worldInfo, const HouseInfo& houseInfo)
+inline Elite::Vector2 GetClosestPosToWorldCenter(const WorldInfo& worldInfo, const HouseInfo& houseInfo)
 {
 	Elite::Vector2 closestPos{ houseInfo.Center.x + houseInfo.Size.x, houseInfo.Center.y + houseInfo.Size.y };
 	float currentClosestPosDistance{ Elite::Distance(closestPos,worldInfo.Center) };
@@ -438,7 +396,7 @@ inline Elite::Vector2 GetPosClosestToWorldCenter(const WorldInfo& worldInfo, con
 	return closestPos;
 }
 
-inline bool SeeAndCanGoOutHouseFunc(Elite::Blackboard* pBlackBoard)
+inline bool SeeAndCanGoOutHouse(Elite::Blackboard* pBlackBoard)
 {
 	//if house in sight
 	std::vector<HouseInfo> housesInSight;
@@ -456,7 +414,28 @@ inline bool SeeAndCanGoOutHouseFunc(Elite::Blackboard* pBlackBoard)
 			pBlackBoard->GetData("worldInfo", worldInfo);
 
 			//set goal to pos outside of house
-			pBlackBoard->AddData("currentGoal", GetPosClosestToWorldCenter(worldInfo, housesInSight[0]));
+			pBlackBoard->AddData("currentGoal", GetClosestPosToWorldCenter(worldInfo, housesInSight[0]));
+			return true;
+		}
+	}
+	return false;
+}
+
+inline bool SeeAndCanGoInHouseF(Elite::Blackboard* pBlackBoard)
+{
+	//if house in sight
+	std::vector<HouseInfo> housesInSight;
+	pBlackBoard->GetData("housesInSight", housesInSight);
+	if (!housesInSight.empty())
+	{
+		//get agentInfo
+		AgentInfo agentInfo;
+		pBlackBoard->GetData("agentInfo", agentInfo);
+		//check if not in house
+		if (!IsInHouse(housesInSight[0], agentInfo))
+		{
+			//set center of house as goal
+			pBlackBoard->AddData("currentGoal", housesInSight[0].Center);
 			return true;
 		}
 	}
