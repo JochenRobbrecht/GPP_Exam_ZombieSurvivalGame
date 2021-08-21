@@ -54,9 +54,9 @@ void Plugin::DllInit()
 	EnemiesNearAndHasPistol* pEnemiesNearAndHasPistol{ new EnemiesNearAndHasPistol() };
 	NoEnemiesNear* pNoEnemiesNear{ new NoEnemiesNear() };
 	NoPistolsLeft* pNoPistolsLeft{ new NoPistolsLeft() };
-	//EnemiesNearNoPistolNoHouseVis* pEnemiesNearNoPistolNoHouseVis{ new EnemiesNearNoPistolNoHouseVis() };
-	//FleeFinished* pFleeFinished{ new FleeFinished() };
-	//PurgeZoneDetected* pPurgeZoneDetected{ new PurgeZoneDetected() };
+	EnemiesNearNoPistolNoHouseVis* pEnemiesNearNoPistolNoHouseVis{ new EnemiesNearNoPistolNoHouseVis() };
+	FleeFinished* pFleeFinished{ new FleeFinished() };
+	PurgeZoneDetected* pPurgeZoneDetected{ new PurgeZoneDetected() };
 	//InPurgeZone* pInPurgeZone{ new InPurgeZone() };
 
 	m_pTransitions.push_back(pItemInSight);
@@ -68,9 +68,9 @@ void Plugin::DllInit()
 	m_pTransitions.push_back(pEnemiesNearAndHasPistol);
 	m_pTransitions.push_back(pNoEnemiesNear);
 	m_pTransitions.push_back(pNoPistolsLeft);
-	//m_pTransitions.push_back(pEnemiesNearNoPistolNoHouseVis);
-	//m_pTransitions.push_back(pFleeFinished);
-	//m_pTransitions.push_back(pPurgeZoneDetected);
+	m_pTransitions.push_back(pEnemiesNearNoPistolNoHouseVis);
+	m_pTransitions.push_back(pFleeFinished);
+	m_pTransitions.push_back(pPurgeZoneDetected);
 	//m_pTransitions.push_back(pInPurgeZone);
 
 	//wander to seek and reverse
@@ -101,15 +101,15 @@ void Plugin::DllInit()
 	m_pFSM->AddTransition(pFaceState, pWanderState, pNoPistolsLeft);
 
 	//to flee if not house vis and no pistol and enemies near
-	//m_pFSM->AddTransition(pWanderState, pFleeState, pEnemiesNearNoPistolNoHouseVis);
-	//m_pFSM->AddTransition(pSeekGoalState, pFleeState, pEnemiesNearNoPistolNoHouseVis);
+	m_pFSM->AddTransition(pWanderState, pFleeState, pEnemiesNearNoPistolNoHouseVis);
+	m_pFSM->AddTransition(pSeekGoalState, pFleeState, pEnemiesNearNoPistolNoHouseVis);
 
 
 	//if purgezone detected and we are outside go to face
-	//m_pFSM->AddTransition(pWanderState, pFaceState, pPurgeZoneDetected);
-	//m_pFSM->AddTransition(pFleeState, pFaceState, pPurgeZoneDetected);
-	//m_pFSM->AddTransition(pSeekItemState, pFaceState, pPurgeZoneDetected);
-	//m_pFSM->AddTransition(pSeekGoalState, pFaceState, pPurgeZoneDetected);
+	m_pFSM->AddTransition(pWanderState, pFaceState, pPurgeZoneDetected);
+	m_pFSM->AddTransition(pFleeState, pFaceState, pPurgeZoneDetected);
+	m_pFSM->AddTransition(pSeekItemState, pFaceState, pPurgeZoneDetected);
+	m_pFSM->AddTransition(pSeekGoalState, pFaceState, pPurgeZoneDetected);
 
 	//if purgezone detected and we are in it seekToGoal outside;
 	//m_pFSM->AddTransition(pWanderState, pSeekGoalState, pInPurgeZone);
@@ -119,7 +119,7 @@ void Plugin::DllInit()
 	//m_pFSM->AddTransition(pSeekGoalState, pSeekGoalState, pInPurgeZone);
 
 	//flee to wander after .. seconds not being attacked
-	//m_pFSM->AddTransition(pFleeState, pWanderState, pFleeFinished);
+	m_pFSM->AddTransition(pFleeState, pWanderState, pFleeFinished);
 
 }
 
@@ -260,7 +260,8 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 	m_pFSM->GetBlackboard()->AddData("nrPistols", m_NrPistols);
 
 	//if lose hp since last frame, not because of energy(diff in hp > 0.2f)
-	if (m_LastFrameHp != agentInfo.Health && (m_LastFrameHp - agentInfo.Health) > 0.2f)
+	float minimumDamageForAttack{ 0.2f };
+	if (m_LastFrameHp != agentInfo.Health && (m_LastFrameHp - agentInfo.Health) > minimumDamageForAttack)
 	{
 		m_LastFrameHp = agentInfo.Health;
 		m_pFSM->GetBlackboard()->AddData("isAttacked", static_cast<bool>(true));

@@ -14,7 +14,7 @@ bool IsInHouse(const HouseInfo& houseInfo, const AgentInfo& agentInfo);
 Elite::Vector2 GetClosestItemPos(const std::vector<ItemInfo>& items, const AgentInfo& agentInfo);
 Elite::Vector2 GetClosestPosToWorldCenter(const WorldInfo& worldInfo, const HouseInfo& houseInfo);
 bool SeeAndCanGoOutHouse(Elite::Blackboard* pBlackBoard);
-bool SeeAndCanGoInHouseF(Elite::Blackboard* pBlackBoard);
+bool SeeAndCanGoInHouseFunct(Elite::Blackboard* pBlackBoard);
 //--STATES--
 //----------
 //store positions of previous houses we went it?
@@ -22,7 +22,7 @@ bool SeeAndCanGoInHouseF(Elite::Blackboard* pBlackBoard);
 //make flee behavior(when seeing enemies or getting attacked)/ face behaviour + shoot (discard gun if empty ammo), set invbool to false
 //if while fleeing we see house, also go in it(even if looted)
 //check if not moving oustide of bounds
-	
+
 class SeekItemState : public Elite::FSMState
 {
 public:
@@ -143,11 +143,19 @@ public:
 	}
 	virtual void OnEnter(Elite::Blackboard* pBlackBoard) override
 	{
-		pBlackBoard->AddData("currentSteering", m_pFlee);
+		ISteeringBehavior* newSteering{ m_pFlee };
+		pBlackBoard->AddData("currentSteering", newSteering);
+		m_ElapsedSec = 0;
+	}
+	virtual void Update(Elite::Blackboard* pBlackBoard, float deltaTime) override
+	{
+		m_ElapsedSec += deltaTime;
+		pBlackBoard->AddData("elapsedTimeFleeing", m_ElapsedSec);
 	}
 
 private:
 	Flee* m_pFlee = nullptr;
+	float m_ElapsedSec = 0;
 };
 
 class FaceState : public Elite::FSMState
@@ -197,12 +205,71 @@ private:
 
 //--TRANSITIONS--
 //---------------
+class PurgeZoneDetected : public Elite::FSMTransition
+{
+public:
+	virtual bool ToTransition(Elite::Blackboard* pBlackBoard)const override
+	{
+		std::vector<PurgeZoneInfo> purgeZonesInSight;
+		pBlackBoard->GetData("purgeZonesInSight", purgeZonesInSight);
+		if (purgeZonesInSight.empty())return false;
+		return true;
+	}
+};
+
+class EnemiesNearNoPistolNoHouseVis : public Elite::FSMTransition
+{
+public:
+	virtual bool ToTransition(Elite::Blackboard* pBlackBoard)const override
+	{
+		//if not attacked return false
+		bool isAttacked{};
+		pBlackBoard->GetData("isAttacked", isAttacked);
+		if (!isAttacked)return false;
+		
+		//if houses visible return false
+		std::vector<HouseInfo> housesInSight;
+		pBlackBoard->GetData("housesInSight", housesInSight);
+		if (!housesInSight.empty())return false;
+
+		//if more than 0 pistols return false
+		int nrPistols{ };
+		pBlackBoard->GetData("nrPistols", nrPistols);
+		/*std::cout << nrPistols << std::endl;*/
+		if (nrPistols > 0)return false;
+
+		return true;
+	}
+private:
+
+};
+
+
+class FleeFinished : public Elite::FSMTransition
+{
+public:
+	virtual bool ToTransition(Elite::Blackboard* pBlackBoard)const override
+	{
+
+		float elapsedTimeFleeing{}, maxFleeTime{ 5.f };
+		pBlackBoard->GetData("elapsedTimeFleeing", elapsedTimeFleeing, false);
+		if (elapsedTimeFleeing >= maxFleeTime)return true;
+		return false;
+	}
+private:
+
+};
+
 class NoEnemiesNear : public Elite::FSMTransition
 {
 public:
 	virtual bool ToTransition(Elite::Blackboard* pBlackBoard)const override
 	{
-		float elapsedTimeSinceLastAttack{}, maxTimeFacingNoAttacks{5.f};
+		std::vector<PurgeZoneInfo> purgeZonesInSight;
+		pBlackBoard->GetData("purgeZonesInSight", purgeZonesInSight);
+		if (!purgeZonesInSight.empty())return false;
+
+		float elapsedTimeSinceLastAttack{}, maxTimeFacingNoAttacks{ 5.f };
 		pBlackBoard->GetData("elapsedTimeSinceLastAttack", elapsedTimeSinceLastAttack);
 		if (elapsedTimeSinceLastAttack >= maxTimeFacingNoAttacks)return true;
 		return false;
@@ -214,6 +281,10 @@ class NoPistolsLeft : public Elite::FSMTransition
 public:
 	virtual bool ToTransition(Elite::Blackboard* pBlackBoard)const override
 	{
+		std::vector<PurgeZoneInfo> purgeZonesInSight;
+		pBlackBoard->GetData("purgeZonesInSight", purgeZonesInSight);
+		if (!purgeZonesInSight.empty())return false;
+
 		int nrPistols{ };
 		pBlackBoard->GetData("nrPistols", nrPistols);
 		if (nrPistols == 0)return true;
@@ -249,7 +320,7 @@ class SeeAndCanGoInHouse : public Elite::FSMTransition
 public:
 	virtual bool ToTransition(Elite::Blackboard* pBlackBoard)const override
 	{
-		return SeeAndCanGoInHouseF(pBlackBoard);
+		return SeeAndCanGoInHouseFunct(pBlackBoard);
 	}
 
 };
@@ -259,13 +330,13 @@ class SeeAndCanGoOutHouseIfLooted : public Elite::FSMTransition
 public:
 	virtual bool ToTransition(Elite::Blackboard* pBlackBoard)const override
 	{
-		float elapsedTimeWandering{};
+		float elapsedTimeWandering{}, minWanderTime{ 6.f };
 		pBlackBoard->GetData("elapsedTimeWandering", elapsedTimeWandering, false);
-		if (elapsedTimeWandering < m_MinWanderTime)return false;
+		if (elapsedTimeWandering < minWanderTime)return false;
 		return SeeAndCanGoOutHouse(pBlackBoard);
 	}
 private:
-	float m_MinWanderTime = 6;
+
 };
 
 class ItemInSight : public Elite::FSMTransition
@@ -421,7 +492,7 @@ inline bool SeeAndCanGoOutHouse(Elite::Blackboard* pBlackBoard)
 	return false;
 }
 
-inline bool SeeAndCanGoInHouseF(Elite::Blackboard* pBlackBoard)
+inline bool SeeAndCanGoInHouseFunct(Elite::Blackboard* pBlackBoard)
 {
 	//if house in sight
 	std::vector<HouseInfo> housesInSight;
